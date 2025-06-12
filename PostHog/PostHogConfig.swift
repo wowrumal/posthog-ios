@@ -69,6 +69,9 @@ import Foundation
     @objc public var propertiesSanitizer: PostHogPropertiesSanitizer?
     /// Determines the behavior for processing user profiles.
     @objc public var personProfiles: PostHogPersonProfiles = .identifiedOnly
+    /// Hook that allows to sanitize the event
+    /// The hook is called before the event is cached or sent over the wire
+    @objc public var eventsSanitizer: PostHogEventsSanitizer?
 
     /// The identifier of the App Group that should be used to store shared analytics data.
     /// PostHog will try to get the physical location of the App Group’s shared container, otherwise fallback to the default location

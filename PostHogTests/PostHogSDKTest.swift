@@ -18,7 +18,8 @@ class PostHogSDKTest: QuickSpec {
                 flushAt: Int = 1,
                 optOut: Bool = false,
                 propertiesSanitizer: PostHogPropertiesSanitizer? = nil,
-                personProfiles: PostHogPersonProfiles = .identifiedOnly) -> PostHogSDK
+                personProfiles: PostHogPersonProfiles = .identifiedOnly,
+                eventsSanitizer: PostHogEventsSanitizer? = nil) -> PostHogSDK
     {
         let config = PostHogConfig(apiKey: testAPIKey, host: "http://localhost:9001")
         config.flushAt = flushAt
@@ -30,6 +31,7 @@ class PostHogSDKTest: QuickSpec {
         config.optOut = optOut
         config.propertiesSanitizer = propertiesSanitizer
         config.personProfiles = personProfiles
+        config.eventsSanitizer = eventsSanitizer
 
         let storage = PostHogStorage(config)
         storage.reset()
@@ -638,6 +640,23 @@ class PostHogSDKTest: QuickSpec {
             expect(event.count).to(equal(2))
             expect(event[0].event).to(equal("$feature_flag_called"))
             expect(event[1].event).to(equal("$feature_flag_called"))
+        }
+
+        it("filter some_event capture when event sanitizer enabled") {
+            let testEventKey = "some_event"
+            let eventsSanitizer = ExampleEventsFilter(eventsToFilter: [testEventKey])
+            let sut = self.getSut(
+                sendFeatureFlagEvent: true,
+                flushAt: 1,
+                eventsSanitizer: eventsSanitizer
+            )
+
+            _ = sut.getFeatureFlag("some_key")
+            sut.capture(testEventKey)
+
+            let event = getBatchedEvents(server)
+            expect(event.count).to(equal(1))
+            expect(event[0].event).to(equal("$feature_flag_called"))
         }
 
         #if os(iOS)

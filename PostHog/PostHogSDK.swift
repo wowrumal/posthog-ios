@@ -604,6 +604,10 @@ let maxRetryDelay = 30.0
             timestamp: eventTimestamp
         )
 
+        if config.eventsSanitizer?.shouldDrop(event, properties: sanitizedProperties) == true {
+            return
+        }
+
         targetQueue?.add(posthogEvent)
 
         #if os(iOS)

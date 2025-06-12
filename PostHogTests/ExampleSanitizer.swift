@@ -21,3 +21,15 @@ class ExampleSanitizer: PostHogPropertiesSanitizer {
         return sanitizedProperties
     }
 }
+
+class ExampleEventsFilter: PostHogEventsSanitizer {
+    private let eventsToFilter: [String]
+
+    init(eventsToFilter: [String]) {
+        self.eventsToFilter = eventsToFilter
+    }
+
+    func shouldDrop(_ event: String, properties: [String: Any]) -> Bool {
+        eventsToFilter.contains(event)
+    }
+}
