@@ -19,7 +19,7 @@ class PostHogSDKTest: QuickSpec {
                 optOut: Bool = false,
                 propertiesSanitizer: PostHogPropertiesSanitizer? = nil,
                 personProfiles: PostHogPersonProfiles = .identifiedOnly,
-                eventsSanitizer: PostHogEventsSanitizer? = nil) -> PostHogSDK
+                beforeSend: @escaping BeforeSendBlock = { $0 }) -> PostHogSDK
     {
         let config = PostHogConfig(apiKey: testAPIKey, host: "http://localhost:9001")
         config.flushAt = flushAt
@@ -31,7 +31,7 @@ class PostHogSDKTest: QuickSpec {
         config.optOut = optOut
         config.propertiesSanitizer = propertiesSanitizer
         config.personProfiles = personProfiles
-        config.eventsSanitizer = eventsSanitizer
+        config.beforeSend = beforeSend
 
         let storage = PostHogStorage(config)
         storage.reset()
@@ -642,21 +642,46 @@ class PostHogSDKTest: QuickSpec {
             expect(event[1].event).to(equal("$feature_flag_called"))
         }
 
-        it("filter some_event capture when event sanitizer enabled") {
+        it("filter some_event capture with custom beforeSend") {
             let testEventKey = "some_event"
-            let eventsSanitizer = ExampleEventsFilter(eventsToFilter: [testEventKey])
             let sut = self.getSut(
                 sendFeatureFlagEvent: true,
-                flushAt: 1,
-                eventsSanitizer: eventsSanitizer
+                flushAt: 3,
+                beforeSend: {
+                    $0.event == testEventKey ? nil : $0
+                }
             )
 
             _ = sut.getFeatureFlag("some_key")
             sut.capture(testEventKey)
+            sut.capture("test_2")
+
+            sut.flush()
 
             let event = getBatchedEvents(server)
-            expect(event.count).to(equal(1))
+
+            expect(event.count).to(equal(2))
             expect(event[0].event).to(equal("$feature_flag_called"))
+            expect(event[1].event).to(equal("test_2"))
+        }
+
+        it("capture all events with default beforeSend") {
+            let testEventKey = "some_event"
+            let sut = self.getSut(
+                sendFeatureFlagEvent: true,
+                flushAt: 3
+            )
+
+            _ = sut.getFeatureFlag("some_key")
+            sut.capture(testEventKey)
+            sut.capture("test_2")
+
+            let event = getBatchedEvents(server)
+
+            expect(event.count).to(equal(3))
+            expect(event[0].event).to(equal("$feature_flag_called"))
+            expect(event[1].event).to(equal(testEventKey))
+            expect(event[2].event).to(equal("test_2"))
         }
 
         #if os(iOS)

@@ -461,13 +461,12 @@ let maxRetryDelay = 30.0
                 userProperties: sanitizeDictionary(userProperties),
                 userPropertiesSetOnce: sanitizeDictionary(userPropertiesSetOnce)
             )
-            let sanitizedProperties = sanitizeProperties(properties)
 
-            queue.add(PostHogEvent(
-                event: "$identify",
-                distinctId: distinctId,
-                properties: sanitizedProperties
-            ))
+            guard let event = buildEvent(event: "$identify", distinctId: distinctId, properties: properties) else {
+                return
+            }
+
+            queue.add(event)
 
             remoteConfig?.reloadFeatureFlags()
 
@@ -604,11 +603,11 @@ let maxRetryDelay = 30.0
             timestamp: eventTimestamp
         )
 
-        if config.eventsSanitizer?.shouldDrop(event, properties: sanitizedProperties) == true {
+        guard let filteredEvent = config.beforeSend(posthogEvent) else {
             return
         }
 
-        targetQueue?.add(posthogEvent)
+        targetQueue?.add(filteredEvent)
 
         #if os(iOS)
             surveysIntegration?.onEvent(event: posthogEvent.event)
@@ -640,13 +639,12 @@ let maxRetryDelay = 30.0
         let distinctId = getDistinctId()
 
         let properties = buildProperties(distinctId: distinctId, properties: props)
-        let sanitizedProperties = sanitizeProperties(properties)
 
-        queue.add(PostHogEvent(
-            event: "$screen",
-            distinctId: distinctId,
-            properties: sanitizedProperties
-        ))
+        guard let event = buildEvent(event: "$screen", distinctId: distinctId, properties: properties) else {
+            return
+        }
+
+        queue.add(event)
     }
 
     func autocapture(
@@ -674,13 +672,12 @@ let maxRetryDelay = 30.0
         let distinctId = getDistinctId()
 
         let properties = buildProperties(distinctId: distinctId, properties: props)
-        let sanitizedProperties = sanitizeProperties(properties)
 
-        queue.add(PostHogEvent(
-            event: "$autocapture",
-            distinctId: distinctId,
-            properties: sanitizedProperties
-        ))
+        guard let event = buildEvent(event: "$autocapture", distinctId: distinctId, properties: properties) else {
+            return
+        }
+
+        queue.add(event)
     }
 
     private func sanitizeProperties(_ properties: [String: Any]) -> [String: Any] {
@@ -712,13 +709,12 @@ let maxRetryDelay = 30.0
         let distinctId = getDistinctId()
 
         let properties = buildProperties(distinctId: distinctId, properties: props)
-        let sanitizedProperties = sanitizeProperties(properties)
 
-        queue.add(PostHogEvent(
-            event: "$create_alias",
-            distinctId: distinctId,
-            properties: sanitizedProperties
-        ))
+        guard let event = buildEvent(event: "$create_alias", distinctId: distinctId, properties: properties) else {
+            return
+        }
+
+        queue.add(event)
     }
 
     private func groups(_ newGroups: [String: String]) -> [String: String] {
@@ -775,13 +771,24 @@ let maxRetryDelay = 30.0
         let distinctId = getDistinctId()
 
         let properties = buildProperties(distinctId: distinctId, properties: props)
+
+        guard let event = buildEvent(event: "$groupidentify", distinctId: distinctId, properties: properties) else {
+            return
+        }
+
+        queue.add(event)
+    }
+
+    func buildEvent(event: String, distinctId: String, properties: [String: Any]) -> PostHogEvent? {
         let sanitizedProperties = sanitizeProperties(properties)
 
-        queue.add(PostHogEvent(
-            event: "$groupidentify",
+        let event = PostHogEvent(
+            event: event,
             distinctId: distinctId,
             properties: sanitizedProperties
-        ))
+        )
+
+        return config.beforeSend(event)
     }
 
     @objc(groupWithType:key:)
