@@ -569,7 +569,7 @@ let maxRetryDelay = 30.0
             return
         }
 
-        let isSnapshotEvent = event == "$snapshot"
+        var isSnapshotEvent = event == "$snapshot"
         let eventTimestamp = timestamp ?? now()
         let eventDistinctId = distinctId ?? getDistinctId()
 
@@ -586,28 +586,31 @@ let maxRetryDelay = 30.0
                                          groups: groups,
                                          appendSharedProps: !isSnapshotEvent,
                                          timestamp: timestamp)
-        let sanitizedProperties = sanitizeProperties(properties)
+
+        // Sanitize is now called in buildEvent
+        let posthogEvent = buildEvent(
+            event: event,
+            distinctId: eventDistinctId,
+            properties: properties,
+            timestamp: eventTimestamp
+        )
+
+        guard let posthogEvent else {
+            return
+        }
+
+        // Reevaluate if this is a snapshot event because the event might have been updated by the beforeSend hook
+        isSnapshotEvent = posthogEvent.event == "$snapshot"
 
         // if this is a $snapshot event and $session_id is missing, don't process then event
-        if isSnapshotEvent, sanitizedProperties["$session_id"] == nil {
+        if isSnapshotEvent, posthogEvent.properties["$session_id"] == nil {
             return
         }
 
         // Session Replay has its own queue
         let targetQueue = isSnapshotEvent ? replayQueue : queue
 
-        let posthogEvent = PostHogEvent(
-            event: event,
-            distinctId: eventDistinctId,
-            properties: sanitizedProperties,
-            timestamp: eventTimestamp
-        )
-
-        guard let filteredEvent = config.beforeSend(posthogEvent) else {
-            return
-        }
-
-        targetQueue?.add(filteredEvent)
+        targetQueue?.add(posthogEvent)
 
         #if os(iOS)
             surveysIntegration?.onEvent(event: posthogEvent.event)
@@ -779,13 +782,14 @@ let maxRetryDelay = 30.0
         queue.add(event)
     }
 
-    func buildEvent(event: String, distinctId: String, properties: [String: Any]) -> PostHogEvent? {
+    func buildEvent(event: String, distinctId: String, properties: [String: Any], timestamp: Date = Date()) -> PostHogEvent? {
         let sanitizedProperties = sanitizeProperties(properties)
 
         let event = PostHogEvent(
             event: event,
             distinctId: distinctId,
-            properties: sanitizedProperties
+            properties: sanitizedProperties,
+            timestamp: timestamp
         )
 
         return config.beforeSend(event)
